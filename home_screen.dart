@@ -10,28 +10,67 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final List<Todo> todos = [];
-  final TextEditingController controller = TextEditingController();
 
-  // Add a new todo
+  final TextEditingController titleController = TextEditingController();
+  final TextEditingController placeController = TextEditingController();
+
+  DateTime? selectedDate;
+  TimeOfDay? selectedTime;
+
+  Future<void> pickDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+
+    if (date != null) {
+      setState(() => selectedDate = date);
+    }
+  }
+
+  Future<void> pickTime() async {
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (time != null) {
+      setState(() => selectedTime = time);
+    }
+  }
+
   void addTodo() {
-    final text = controller.text.trim();
-    if (text.isEmpty) return;
+    if (titleController.text.isEmpty ||
+        placeController.text.isEmpty ||
+        selectedDate == null ||
+        selectedTime == null)
+      return;
 
     setState(() {
-      todos.add(Todo(title: text));
-      controller.clear();
-      FocusScope.of(context).unfocus(); // dismiss keyboard
+      todos.add(
+        Todo(
+          title: titleController.text,
+          place: placeController.text,
+          date: selectedDate!,
+          time: selectedTime!,
+        ),
+      );
+
+      titleController.clear();
+      placeController.clear();
+      selectedDate = null;
+      selectedTime = null;
     });
   }
 
-  // Toggle the completion status
   void toggleTodo(int index) {
     setState(() {
       todos[index].isDone = !todos[index].isDone;
     });
   }
 
-  // Delete a todo
   void deleteTodo(int index) {
     setState(() {
       todos.removeAt(index);
@@ -42,79 +81,96 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color.fromARGB(255, 150, 214, 243),
-        title: Column(
-          children: const [
-            Text(
-              'To-Do Application',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 25),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Organize your tasks efficiently!',
-              style: TextStyle(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                color: Color.fromARGB(255, 249, 81, 81),
-              ),
-            ),
-          ],
+        backgroundColor: const Color.fromARGB(255, 157, 218, 246),
+        title: const Text(
+          'To-Do Application',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        elevation: 2,
       ),
-
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
+            padding: const EdgeInsets.all(12),
+            child: Column(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter task',
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => addTodo(), // press enter to add
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Task Title',
+                    border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(onPressed: addTodo, child: const Text('Add')),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: placeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Place',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    ElevatedButton(
+                      onPressed: pickDate,
+                      child: Text(
+                        selectedDate == null
+                            ? 'Pick Date'
+                            : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: pickTime,
+                      child: Text(
+                        selectedTime == null
+                            ? 'Pick Time'
+                            : selectedTime!.format(context),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: addTodo,
+                  child: const Text('Add Task'),
+                ),
               ],
             ),
           ),
 
-          // List of todos
           Expanded(
             child: todos.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No tasks yet!',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
+                ? const Center(child: Text('No tasks yet'))
                 : ListView.builder(
                     itemCount: todos.length,
                     itemBuilder: (context, index) {
                       final todo = todos[index];
-                      return ListTile(
-                        leading: Checkbox(
-                          value: todo.isDone,
-                          onChanged: (_) => toggleTodo(index),
-                        ),
-                        title: Text(
-                          todo.title,
-                          style: TextStyle(
-                            decoration: todo.isDone
-                                ? TextDecoration.lineThrough
-                                : TextDecoration.none,
+                      return Card(
+                        margin: const EdgeInsets.all(8),
+                        child: ListTile(
+                          leading: Checkbox(
+                            value: todo.isDone,
+                            onChanged: (_) => toggleTodo(index),
                           ),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => deleteTodo(index),
+                          title: Text(
+                            todo.title,
+                            style: TextStyle(
+                              decoration: todo.isDone
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${todo.place}\n'
+                            '${todo.date.day}/${todo.date.month}/${todo.date.year} • '
+                            '${todo.time.format(context)}',
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => deleteTodo(index),
+                          ),
                         ),
                       );
                     },
