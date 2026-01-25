@@ -16,6 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   DateTime? selectedDate;
   TimeOfDay? selectedTime;
+  Priority selectedPriority = Priority.medium;
 
   Future<void> pickDate() async {
     final date = await showDatePicker(
@@ -55,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
           place: placeController.text,
           date: selectedDate!,
           time: selectedTime!,
+          priority: selectedPriority,
         ),
       );
 
@@ -62,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
       placeController.clear();
       selectedDate = null;
       selectedTime = null;
+      selectedPriority = Priority.medium;
     });
   }
 
@@ -75,6 +78,40 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       todos.removeAt(index);
     });
+  }
+
+  void confirmDelete(int index) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Task'),
+        content: const Text('Are you sure you want to delete this task?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              deleteTodo(index);
+              Navigator.pop(context);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color priorityColor(Priority priority) {
+    switch (priority) {
+      case Priority.high:
+        return Colors.red;
+      case Priority.medium:
+        return Colors.orange;
+      case Priority.low:
+        return Colors.green;
+    }
   }
 
   @override
@@ -109,6 +146,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                const SizedBox(height: 8),
+
+                DropdownButtonFormField<Priority>(
+                  value: selectedPriority,
+                  decoration: const InputDecoration(
+                    labelText: 'Priority',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: Priority.low, child: Text('Low')),
+                    DropdownMenuItem(
+                      value: Priority.medium,
+                      child: Text('Medium'),
+                    ),
+                    DropdownMenuItem(value: Priority.high, child: Text('High')),
+                  ],
+                  onChanged: (value) {
+                    setState(() => selectedPriority = value!);
+                  },
+                ),
+
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -157,19 +215,41 @@ class _HomeScreenState extends State<HomeScreen> {
                           title: Text(
                             todo.title,
                             style: TextStyle(
+                              fontWeight: FontWeight.bold,
                               decoration: todo.isDone
                                   ? TextDecoration.lineThrough
                                   : null,
                             ),
                           ),
-                          subtitle: Text(
-                            '${todo.place}\n'
-                            '${todo.date.day}/${todo.date.month}/${todo.date.year} • '
-                            '${todo.time.format(context)}',
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(todo.place),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 6,
+                                children: [
+                                  Chip(
+                                    label: Text(
+                                      '${todo.date.day}/${todo.date.month}/${todo.date.year}',
+                                    ),
+                                  ),
+                                  Chip(label: Text(todo.time.format(context))),
+                                  Chip(
+                                    label: Text(
+                                      todo.priority.name.toUpperCase(),
+                                    ),
+                                    backgroundColor: priorityColor(
+                                      todo.priority,
+                                    ).withOpacity(0.2),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => deleteTodo(index),
+                            onPressed: () => confirmDelete(index),
                           ),
                         ),
                       );
