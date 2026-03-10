@@ -1,41 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
-
-enum Priority { low, medium, high }
-
-class Todo {
-  String title;
-  String place;
-  DateTime dateTime;
-  Priority priority;
-  bool isDone;
-
-  Todo({
-    required this.title,
-    required this.place,
-    required this.dateTime,
-    required this.priority,
-    this.isDone = false,
-  });
-
-  Map<String, dynamic> toMap() => {
-    'title': title,
-    'place': place,
-    'dateTime': dateTime.toIso8601String(),
-    'priority': priority.index,
-    'isDone': isDone,
-  };
-
-  factory Todo.fromMap(Map map) => Todo(
-    title: map['title'],
-    place: map['place'],
-    dateTime: DateTime.parse(map['dateTime']),
-    priority: Priority.values[map['priority']],
-    isDone: map['isDone'],
-  );
-}
+import '../models/todo_model.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -46,33 +12,22 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final box = Hive.box('todos');
-  final FlutterLocalNotificationsPlugin notifications =
-      FlutterLocalNotificationsPlugin();
 
   List<Todo> todos = [];
-  List<Todo> filteredTodos = [];
+  List<Todo> filtered = [];
 
-  final titleController = TextEditingController();
-  final placeController = TextEditingController();
+  final titleC = TextEditingController();
+  final placeC = TextEditingController();
 
-  Priority selectedPriority = Priority.medium;
-  DateTime? selectedDateTime;
+  Priority priority = Priority.medium;
+  DateTime? dateTime;
 
-  String searchText = "";
-  Priority? filterPriority;
+  String search = "";
 
   @override
   void initState() {
     super.initState();
-    initNotifications();
     loadTodos();
-  }
-
-  @override
-  void dispose() {
-    titleController.dispose();
-    placeController.dispose();
-    super.dispose();
   }
 
   void loadTodos() {
@@ -81,183 +36,40 @@ class _HomeScreenState extends State<HomeScreen> {
     todos = data
         .map((e) => Todo.fromMap(Map<String, dynamic>.from(e)))
         .toList();
-
-    applyFilters();
+    applyFilter();
   }
 
   void saveTodos() {
     box.put('tasks', todos.map((e) => e.toMap()).toList());
   }
 
-  void initNotifications() async {
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+  void applyFilter() {
+    filtered = todos
+        .where((t) => t.title.toLowerCase().contains(search.toLowerCase()))
+        .toList();
 
-    await notifications.initialize(
-      const InitializationSettings(android: android),
-    );
+    filtered.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+    setState(() {});
   }
 
-  Future<void> scheduleNotification(Todo todo) async {
-    await notifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      "Task Reminder",
-      todo.title,
-      const NotificationDetails(
-        android: AndroidNotificationDetails('todo', 'Tasks'),
-      ),
-    );
-  }
+  void addOrEdit({int? index}) {
+    if (titleC.text.isEmpty || placeC.text.isEmpty || dateTime == null) return;
 
-  void addOrEditTodo({int? index}) {
-    if (titleController.text.isEmpty ||
-        placeController.text.isEmpty ||
-        selectedDateTime == null)
-      return;
-
-    final todo = Todo(
-      title: titleController.text,
-      place: placeController.text,
-      dateTime: selectedDateTime!,
-      priority: selectedPriority,
+    final task = Todo(
+      title: titleC.text,
+      place: placeC.text,
+      dateTime: dateTime!,
+      priority: priority,
     );
 
     setState(() {
-      if (index == null) {
-        todos.add(todo);
-        scheduleNotification(todo);
-      } else {
-        todos[index] = todo;
-      }
-
+      index == null ? todos.add(task) : todos[index] = task;
       saveTodos();
-      applyFilters();
+      applyFilter();
     });
 
     Navigator.pop(context);
-  }
-
-  void applyFilters() {
-    filteredTodos = todos.where((t) {
-      final matchSearch = t.title.toLowerCase().contains(
-        searchText.toLowerCase(),
-      );
-
-      final matchPriority =
-          filterPriority == null || t.priority == filterPriority;
-
-      return matchSearch && matchPriority;
-    }).toList();
-
-    filteredTodos.sort((a, b) => a.dateTime.compareTo(b.dateTime));
-  }
-
-  void openForm({int? index}) {
-    if (index != null) {
-      final t = filteredTodos[index];
-
-      titleController.text = t.title;
-      placeController.text = t.place;
-      selectedPriority = t.priority;
-      selectedDateTime = t.dateTime;
-    } else {
-      titleController.clear();
-      placeController.clear();
-      selectedDateTime = null;
-      selectedPriority = Priority.medium;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          top: 20,
-        ),
-        child: Wrap(
-          children: [
-            const Text(
-              "Task Details",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 15),
-
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: "Title",
-                border: OutlineInputBorder(),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            TextField(
-              controller: placeController,
-              decoration: const InputDecoration(
-                labelText: "Place",
-                border: OutlineInputBorder(),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            DropdownButtonFormField(
-              value: selectedPriority,
-              decoration: const InputDecoration(border: OutlineInputBorder()),
-              items: Priority.values
-                  .map(
-                    (e) => DropdownMenuItem(
-                      value: e,
-                      child: Text(e.name.toUpperCase()),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => selectedPriority = v!,
-            ),
-
-            const SizedBox(height: 10),
-
-            ElevatedButton(
-              child: const Text("Pick Date & Time"),
-              onPressed: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime(2100),
-                );
-
-                final time = await showTimePicker(
-                  context: context,
-                  initialTime: TimeOfDay.now(),
-                );
-
-                if (date != null && time != null) {
-                  selectedDateTime = DateTime(
-                    date.year,
-                    date.month,
-                    date.day,
-                    time.hour,
-                    time.minute,
-                  );
-                }
-              },
-            ),
-
-            const SizedBox(height: 10),
-
-            ElevatedButton(
-              onPressed: () => addOrEditTodo(index: index),
-              child: Text(index == null ? "Add Task" : "Update Task"),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Color priorityColor(Priority p) {
@@ -266,18 +78,87 @@ class _HomeScreenState extends State<HomeScreen> {
         return Colors.red;
       case Priority.medium:
         return Colors.orange;
-      case Priority.low:
+      default:
         return Colors.green;
     }
   }
 
+  void openForm({int? index}) {
+    if (index != null) {
+      final t = filtered[index];
+      titleC.text = t.title;
+      placeC.text = t.place;
+      priority = t.priority;
+      dateTime = t.dateTime;
+    } else {
+      titleC.clear();
+      placeC.clear();
+      dateTime = null;
+      priority = Priority.medium;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          children: [
+            TextField(
+              controller: titleC,
+              decoration: const InputDecoration(labelText: "Title"),
+            ),
+            TextField(
+              controller: placeC,
+              decoration: const InputDecoration(labelText: "Place"),
+            ),
+
+            DropdownButtonFormField(
+              value: priority,
+              items: Priority.values
+                  .map((e) => DropdownMenuItem(value: e, child: Text(e.name)))
+                  .toList(),
+              onChanged: (v) => priority = v!,
+            ),
+
+            ElevatedButton(
+              child: const Text("Pick Date & Time"),
+              onPressed: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime.now(),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2100),
+                );
+
+                final t = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.now(),
+                );
+
+                if (d != null && t != null) {
+                  dateTime = DateTime(d.year, d.month, d.day, t.hour, t.minute);
+                }
+              },
+            ),
+
+            ElevatedButton(
+              onPressed: () => addOrEdit(index: index),
+              child: Text(index == null ? "Add Task" : "Update Task"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    int doneCount = todos.where((t) => t.isDone).length;
-    double progress = todos.isEmpty ? 0 : doneCount / todos.length;
+    int done = todos.where((e) => e.isDone).length;
+    double progress = todos.isEmpty ? 0 : done / todos.length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Task Manager"), centerTitle: true),
+      appBar: AppBar(title: const Text("Task Manager")),
 
       body: Column(
         children: [
@@ -285,59 +166,42 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.all(12),
             child: TextField(
               decoration: const InputDecoration(
-                hintText: "Search task",
+                hintText: "Search Task",
                 prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
               ),
               onChanged: (v) {
-                setState(() {
-                  searchText = v;
-                  applyFilters();
-                });
+                search = v;
+                applyFilter();
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: LinearProgressIndicator(value: progress),
-          ),
 
-          const SizedBox(height: 10),
+          LinearProgressIndicator(value: progress),
+
           Expanded(
-            child: filteredTodos.isEmpty
-                ? const Center(child: Text("No Tasks Yet"))
+            child: filtered.isEmpty
+                ? const Center(child: Text("No Tasks"))
                 : ListView.builder(
-                    itemCount: filteredTodos.length,
-                    itemBuilder: (context, index) {
-                      final todo = filteredTodos[index];
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final t = filtered[i];
 
                       return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
                         child: ListTile(
                           leading: Checkbox(
-                            value: todo.isDone,
+                            value: t.isDone,
                             onChanged: (_) {
                               setState(() {
-                                todo.isDone = !todo.isDone;
+                                t.isDone = !t.isDone;
                                 saveTodos();
                               });
                             },
                           ),
 
-                          title: Text(
-                            todo.title,
-                            style: TextStyle(
-                              decoration: todo.isDone
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
+                          title: Text(t.title),
 
                           subtitle: Text(
-                            "${todo.place}\n${DateFormat('dd MMM yyyy – hh:mm a').format(todo.dateTime)}",
+                            "${t.place}\n${DateFormat('dd MMM yyyy – hh:mm a').format(t.dateTime)}",
                           ),
 
                           trailing: Row(
@@ -345,27 +209,23 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit),
-                                onPressed: () => openForm(index: index),
+                                onPressed: () => openForm(index: i),
                               ),
 
                               IconButton(
                                 icon: const Icon(Icons.delete),
                                 onPressed: () {
                                   setState(() {
-                                    todos.remove(todo);
+                                    todos.remove(t);
                                     saveTodos();
-                                    applyFilters();
+                                    applyFilter();
                                   });
                                 },
                               ),
 
-                              Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: priorityColor(todo.priority),
-                                  shape: BoxShape.circle,
-                                ),
+                              CircleAvatar(
+                                radius: 6,
+                                backgroundColor: priorityColor(t.priority),
                               ),
                             ],
                           ),
