@@ -68,14 +68,20 @@ class _HomeScreenState extends State<HomeScreen> {
     loadTodos();
   }
 
-  // ===============================
-  // Hive Storage
-  // ===============================
+  @override
+  void dispose() {
+    titleController.dispose();
+    placeController.dispose();
+    super.dispose();
+  }
+
   void loadTodos() {
     final data = box.get('tasks', defaultValue: []) as List;
+
     todos = data
         .map((e) => Todo.fromMap(Map<String, dynamic>.from(e)))
         .toList();
+
     applyFilters();
   }
 
@@ -83,11 +89,9 @@ class _HomeScreenState extends State<HomeScreen> {
     box.put('tasks', todos.map((e) => e.toMap()).toList());
   }
 
-  // ===============================
-  // Notifications
-  // ===============================
   void initNotifications() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+
     await notifications.initialize(
       const InitializationSettings(android: android),
     );
@@ -104,9 +108,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ===============================
-  // Add / Edit Task
-  // ===============================
   void addOrEditTodo({int? index}) {
     if (titleController.text.isEmpty ||
         placeController.text.isEmpty ||
@@ -135,9 +136,6 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.pop(context);
   }
 
-  // ===============================
-  // Filters & Search
-  // ===============================
   void applyFilters() {
     filteredTodos = todos.where((t) {
       final matchSearch = t.title.toLowerCase().contains(
@@ -153,12 +151,10 @@ class _HomeScreenState extends State<HomeScreen> {
     filteredTodos.sort((a, b) => a.dateTime.compareTo(b.dateTime));
   }
 
-  // ===============================
-  // Bottom Sheet Form
-  // ===============================
   void openForm({int? index}) {
     if (index != null) {
       final t = filteredTodos[index];
+
       titleController.text = t.title;
       placeController.text = t.place;
       selectedPriority = t.priority;
@@ -174,19 +170,44 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          top: 20,
+        ),
         child: Wrap(
           children: [
+            const Text(
+              "Task Details",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 15),
+
             TextField(
               controller: titleController,
-              decoration: const InputDecoration(labelText: "Title"),
+              decoration: const InputDecoration(
+                labelText: "Title",
+                border: OutlineInputBorder(),
+              ),
             ),
+
+            const SizedBox(height: 10),
+
             TextField(
               controller: placeController,
-              decoration: const InputDecoration(labelText: "Place"),
+              decoration: const InputDecoration(
+                labelText: "Place",
+                border: OutlineInputBorder(),
+              ),
             ),
+
+            const SizedBox(height: 10),
+
             DropdownButtonFormField(
               value: selectedPriority,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
               items: Priority.values
                   .map(
                     (e) => DropdownMenuItem(
@@ -197,6 +218,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   .toList(),
               onChanged: (v) => selectedPriority = v!,
             ),
+
+            const SizedBox(height: 10),
+
             ElevatedButton(
               child: const Text("Pick Date & Time"),
               onPressed: () async {
@@ -223,6 +247,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               },
             ),
+
+            const SizedBox(height: 10),
+
             ElevatedButton(
               onPressed: () => addOrEditTodo(index: index),
               child: Text(index == null ? "Add Task" : "Update Task"),
@@ -233,9 +260,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ===============================
-  // UI Helpers
-  // ===============================
   Color priorityColor(Priority p) {
     switch (p) {
       case Priority.high:
@@ -253,32 +277,8 @@ class _HomeScreenState extends State<HomeScreen> {
     double progress = todos.isEmpty ? 0 : doneCount / todos.length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Task Manager"),
-        actions: [
-          PopupMenuButton<Priority?>(
-            onSelected: (value) {
-              setState(() {
-                filterPriority = value;
-                applyFilters();
-              });
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: null, child: Text("All")),
-              const PopupMenuItem(value: Priority.high, child: Text("High")),
-              const PopupMenuItem(
-                value: Priority.medium,
-                child: Text("Medium"),
-              ),
-              const PopupMenuItem(value: Priority.low, child: Text("Low")),
-            ],
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text("Task Manager"), centerTitle: true),
 
-      // ===============================
-      // BODY
-      // ===============================
       body: Column(
         children: [
           Padding(
@@ -287,6 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: const InputDecoration(
                 hintText: "Search task",
                 prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
               ),
               onChanged: (v) {
                 setState(() {
@@ -296,58 +297,77 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: LinearProgressIndicator(value: progress),
+          ),
 
-          LinearProgressIndicator(value: progress),
-
+          const SizedBox(height: 10),
           Expanded(
             child: filteredTodos.isEmpty
-                ? const Center(child: Text("No tasks"))
+                ? const Center(child: Text("No Tasks Yet"))
                 : ListView.builder(
                     itemCount: filteredTodos.length,
                     itemBuilder: (context, index) {
                       final todo = filteredTodos[index];
 
-                      return Dismissible(
-                        key: Key(todo.title),
-                        onDismissed: (_) {
-                          setState(() {
-                            todos.remove(todo);
-                            saveTodos();
-                            applyFilters();
-                          });
-                        },
-                        child: Card(
-                          child: ListTile(
-                            leading: Checkbox(
-                              value: todo.isDone,
-                              onChanged: (_) {
-                                setState(() {
-                                  todo.isDone = !todo.isDone;
-                                  saveTodos();
-                                });
-                              },
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        child: ListTile(
+                          leading: Checkbox(
+                            value: todo.isDone,
+                            onChanged: (_) {
+                              setState(() {
+                                todo.isDone = !todo.isDone;
+                                saveTodos();
+                              });
+                            },
+                          ),
+
+                          title: Text(
+                            todo.title,
+                            style: TextStyle(
+                              decoration: todo.isDone
+                                  ? TextDecoration.lineThrough
+                                  : null,
                             ),
-                            title: Text(todo.title),
-                            subtitle: Text(
-                              "${todo.place}\n${DateFormat('dd MMM yyyy – hh:mm a').format(todo.dateTime)}",
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () => openForm(index: index),
+                          ),
+
+                          subtitle: Text(
+                            "${todo.place}\n${DateFormat('dd MMM yyyy – hh:mm a').format(todo.dateTime)}",
+                          ),
+
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit),
+                                onPressed: () => openForm(index: index),
+                              ),
+
+                              IconButton(
+                                icon: const Icon(Icons.delete),
+                                onPressed: () {
+                                  setState(() {
+                                    todos.remove(todo);
+                                    saveTodos();
+                                    applyFilters();
+                                  });
+                                },
+                              ),
+
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: priorityColor(todo.priority),
+                                  shape: BoxShape.circle,
                                 ),
-                                Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: priorityColor(todo.priority),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -357,9 +377,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
-      // ===============================
-      // FAB
-      // ===============================
       floatingActionButton: FloatingActionButton(
         onPressed: () => openForm(),
         child: const Icon(Icons.add),
